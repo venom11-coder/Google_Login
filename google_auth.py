@@ -41,7 +41,7 @@ appconf= {
     "OAUTH2_CLIENT_SECRET":os.getenv("OAUTH2_CLIENT_SECRET"),
     "OAUTH2_META_URL": os.getenv("OAUTH2_META_URL"),
     "FLASK_SECRET": os.getenv("FLASK_SECRET"),
-    "FLASK_PORT": 5000
+    
 
 }
 
@@ -144,4 +144,5 @@ def googleCallback():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=app.config.get("FLASK_PORT")) 
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
