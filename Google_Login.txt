@@ -1,0 +1,4 @@
+Used for google login
+ Endpoint(Public)= web-production-f7f35.up.railway.app
+GitHub repo : https://github.com/venom11-coder/Google_Login/
+Railway: bubbly-vision
