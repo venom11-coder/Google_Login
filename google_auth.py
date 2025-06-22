@@ -58,8 +58,10 @@ appconf= {
 
 # configures the app with the credentials
 
+app.config.update(appconf)
 app.secret_key = app.config["FLASK_SECRET"]
 oAuth = OAuth(app)
+
 
 # registers with all the credentaisl
 oAuth.register("Fittergem",

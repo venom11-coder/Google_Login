@@ -1,2 +1,14 @@
+# Ignore Python cache & envs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
 .env
-credentials.json
+
+# Ignore old Flask session files
+flask_session/
+
+# Ignore system files
+.DS_Store
