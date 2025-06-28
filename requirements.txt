@@ -1,7 +1,9 @@
 Flask
-authlib
-gunicorn
 requests
+httpx
 python-dotenv
 SQLAlchemy
-psycopg2-binary
+google-api-python-client
+google-auth
+google-auth-oauthlib
+authlib
