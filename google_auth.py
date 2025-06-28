@@ -173,12 +173,23 @@ async def logout():
 
 @app.route("/google-calender")
 def Calender_Integration():
+ msg = request.args.get("msg")
+ if msg:
+    # Rebuild GPT prompt with that message instead of just the event list
+    user_input = {
+        "user_id": session.get("user_id"),
+        "message": msg
+    }
+    response = httpx.post(f"https://{url}/chat", json=user_input)
+    # You can now apply the returned GPT plan (if JSON) automatically
+
  user_id = session["user_id"]
  
  db=SessionLocal()
  user_exist = db.query(Calender).filter(Calender.client_id_google==user_id).first()
  
  if user_exist is None:
+    session["pending_message"] = request.json.get("message")
     return redirect("/calendar-access")
  
  data=json.loads(user_exist.token_google)
@@ -328,7 +339,11 @@ def calenderstore():
 
   db.merge(new_user)
   db.commit()
-  return redirect("/google-calender") 
+  pending = session.pop("pending_message", None)
+  if pending:
+        return redirect(url_for("google_calender", msg=pending))
+
+  return redirect("/google-calender")
 
 @app.route("/calender-update" , methods=['POST'])
 def calender_update():
