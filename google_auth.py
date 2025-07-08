@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from sqlalchemy import Text, Column, Integer,DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from flask_cors import CORS
 from datetime import datetime, timedelta, timezone
 
 load_dotenv()
@@ -21,6 +22,8 @@ api_key = os.getenv("api_key")
 # creates a flask object
 
 app = Flask(__name__)
+
+CORS(app, supports_credentials=True)
 
 MAP_API_KEY = os.getenv("MAP_API_KEY")
 
@@ -110,7 +113,20 @@ def home():
        return redirect(url_for("googleLogin"))
     user_exist = db.query(User).filter(User.user_id==user_id).first()
     if user_exist is not None:
-          return redirect(f"fittergem://callback?user_id={user_id}")
+          return """
+<html>
+  <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+    <h2>Login successful!</h2>
+    <p>You can now return to the Fittergem app.</p>
+    <script>
+      setTimeout(function() {
+        window.close();
+      }, 1000);
+    </script>
+  </body>
+</html>
+"""
+
     else:
         return redirect(url_for("googleLogin", external=True))
 
@@ -154,7 +170,21 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return redirect(f"fittergem://callback?user_id={google_id}")
+        return """
+<html>
+  <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+    <h2>Login successful!</h2>
+    <p>You can now return to the Fittergem app.</p>
+    <script>
+      setTimeout(function() {
+        window.close();
+      }, 1000);
+    </script>
+  </body>
+</html>
+"""
+
+
 
 
 
@@ -167,6 +197,20 @@ def googleCallback():
 async def logout():
     session.clear()
     return redirect("/")
+
+@app.route("/check-login")
+def check_login():
+    email = request.args.get("email")
+    if not email:
+        return jsonify({"error": "Missing email"}), 400
+
+    db = SessionLocal()
+    user = db.query(User).filter(User.email_id == email).first()
+
+    if user:
+        return jsonify({"status": "logged_in", "user_id": user.user_id})
+    else:
+        return jsonify({"status": "not_logged_in"})
 
 
 
