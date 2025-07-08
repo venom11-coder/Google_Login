@@ -154,13 +154,9 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return f"""
-<html>
-  <script>
-    window.location.href = "fittergem://callback?user_id={google_id}";
-  </script>
-</html>
-"""
+        return redirect(f"https://web-production-f7f35.up.railway.app/auth-success?user_id={google_id}")
+
+
 
     except Exception as e:
         print("Error during callback:", e)
