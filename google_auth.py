@@ -154,7 +154,13 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return redirect(f"https://web-production-f7f35.up.railway.app/auth-success?user_id={google_id}")
+        return f"""
+<html>
+  <script>
+    window.location.href = "fittergem://callback?user_id={google_id}";
+  </script>
+</html>
+"""
 
     except Exception as e:
         print("Error during callback:", e)
@@ -165,18 +171,6 @@ async def logout():
     session.clear()
     return redirect("/")
 
-@app.route("/auth-success")
-def auth_success():
-    user_id = request.args.get("user_id")
-    return f"""
-    <html>
-    <body>
-    <script>
-      window.location = "https://web-production-f7f35.up.railway.app/auth-success?user_id={user_id}";
-    </script>
-    </body>
-    </html>
-       """
 
 
 @app.route("/google-calender")
@@ -456,4 +450,4 @@ def calender_event_delete():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port)
