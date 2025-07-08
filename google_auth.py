@@ -165,6 +165,12 @@ async def logout():
     session.clear()
     return redirect("/")
 
+@app.route("/auth-success")
+def auth_success():
+    user_id = request.args.get("user_id")
+    return f"Success! You are logged in as {user_id}"
+
+
 @app.route("/google-calender")
 def Calender_Integration():
  msg = request.args.get("msg")
