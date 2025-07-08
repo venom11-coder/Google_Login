@@ -168,7 +168,15 @@ async def logout():
 @app.route("/auth-success")
 def auth_success():
     user_id = request.args.get("user_id")
-    return f"Success! You are logged in as {user_id}"
+    return f"""
+    <html>
+    <body>
+    <script>
+      window.location = "https://web-production-f7f35.up.railway.app/auth-success?user_id={user_id}";
+    </script>
+    </body>
+    </html>
+       """
 
 
 @app.route("/google-calender")
