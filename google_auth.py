@@ -154,13 +154,7 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return jsonify({
-            "user_id": google_id,
-            "email": email_id,
-            "first_name": first_name,
-            "last_name": last_name,
-            "full_name": full_name
-        })
+        return redirect(f"fittergem://callback?user_id={google_id}")
 
     except Exception as e:
         print("Error during callback:", e)
@@ -263,11 +257,6 @@ def Calender_Integration():
        "The schedule is below:"
        )
 
-       message =  {"role":"system", "content": "if the user requests to make changes to google calender, could be to add or remove multiple events, if you do not have any information related to the events, then just confirm it with user then return the events in json file with status: google_calender_update or google_calender_delete, event: event mentioned, time_start: time mentioned, time_end: time to end by user, timeZone: {timezone_id}, summary: Add a little summary for the event"}
-       
-       message1 = { "role":"system", "content": "if the user requests to make changes to make changes to his cheat meal plan then update it and send the whole plan again in json file with status: cheat_meal_update , Restraunt_Name: , Address: , Recommended Meals: , Remarks: "}
-
-       message2 = { "role":"system", "content": "if the user requests to make changes to his workout plan(Not on google Calender) then update it and send the whole plan again in json file with status: workout_plan_update, workout_Name: , reps: (give a range of 5 like 40-45), Remarks: "}
        if not events:
         print("No upcoming events found.")
         prompt = ("if no events found. Do not assume the user is free. When recommending workouts, diet changes, or other plans, do not assume full availability. Instead, ask the user about their preferred or available time slots before making detailed suggestions. Just reply with 'noted'.")
@@ -292,10 +281,8 @@ def Calender_Integration():
  schedule_string = "\n\n".join(lines)
  messages = [
     {"role": "system", "content": prompt},
-    message,
-    message1,
-    message2,
-    {"role": "user", "content": schedule_string}
+    
+    {"role": "system", "content": schedule_string} # changes to system here!!!! NEEDS TO BE DEPLOYED AGAIN IF CHANGE ACCEPTED!!!!!
 ]
  user_input = {
          
