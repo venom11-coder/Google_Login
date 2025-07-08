@@ -154,7 +154,8 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return redirect(f"https://web-production-f7f35.up.railway.app/auth-success?user_id={google_id}")
+        return redirect(f"fittergem://callback?user_id={google_id}")
+
 
 
 
