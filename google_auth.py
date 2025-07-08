@@ -110,7 +110,7 @@ def home():
        return redirect(url_for("googleLogin"))
     user_exist = db.query(User).filter(User.user_id==user_id).first()
     if user_exist is not None:
-        return jsonify(f"fittergem://callback?user_id={user_id}")
+        return redirect(f"fittergem://callback?user_id={user_id}")
     else:
         return redirect(url_for("googleLogin", external=True))
 
