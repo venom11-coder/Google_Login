@@ -135,6 +135,14 @@ def googleLogin():
     redirect_uri = url_for("googleCallback", _external=True)
     return oAuth.Fittergem.authorize_redirect(redirect_uri)
 
+@app.route("/check-login-session")
+def check_login_session():
+    user_id = session.get("user_id")
+    if user_id:
+        return jsonify({"status": "logged_in", "user_id": user_id})
+    return jsonify({"status": "not_logged_in"})
+
+
 
 @app.route("/signin-google")
 def googleCallback():
