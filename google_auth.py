@@ -360,7 +360,7 @@ def calenderaccess():
 )
 
 
-@app.route("/calender-info-store")
+@app.route("/calender-info-store", methods = ['GET', 'POST'])
 def calenderstore():
   db = SessionLocal()
   token= oAuth.Fittergem.authorize_access_token()
