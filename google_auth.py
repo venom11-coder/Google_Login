@@ -33,6 +33,8 @@ url_timezone = "web-production-2504b.up.railway.app/timezone"
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+
+
 #VERY IMPORTANT LINE TO FORCE GOOGLE TO GENERATE HTTPS REQUEST!!!!!
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -132,7 +134,7 @@ def home():
 
 @app.route("/google-login")
 def googleLogin():
-    redirect_uri = url_for("googleCallback", _external=True)
+    redirect_uri = url_for("googleCallback", _external=True, _scheme="https")
     return oAuth.Fittergem.authorize_redirect(redirect_uri)
 
 @app.route("/check-login-session")
@@ -178,19 +180,8 @@ def googleCallback():
             db.add(new_user)
             db.commit()
 
-        return """
-<html>
-  <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-    <h2>Login successful!</h2>
-    <p>You can now return to the Fittergem app.</p>
-    <script>
-      setTimeout(function() {
-        window.close();
-      }, 1000);
-    </script>
-  </body>
-</html>
-"""
+        return redirect("/calendar-access")
+
 
 
 
@@ -240,7 +231,7 @@ def Calender_Integration():
  user_exist = db.query(Calender).filter(Calender.client_id_google==user_id).first()
  
  if user_exist is None:
-    session["pending_message"] = request.json.get("message")
+    session["pending_message"] = "fetch_schedule"
     return redirect("/calendar-access")
  
  data=json.loads(user_exist.token_google)
@@ -350,44 +341,70 @@ def Calender_Integration():
  with httpx.Client() as client:
         response =   client.post(f"https://{url}/chat", json=user_input)
         return jsonify(status="user calender accessed!")
+ 
 @app.route("/calendar-access")
 def calenderaccess():
-  redirect_uri = url_for("calenderstore", _external=True)
-  return oAuth.Fittergem.authorize_redirect(
-    redirect_uri,
-    access_type="offline",
-    prompt="consent"
-)
+    session["pending_message"] = "fetch_schedule"  # ✅ Save the intent
+    redirect_uri = url_for("calenderstore", _external=True)
+    return oAuth.Fittergem.authorize_redirect(
+        redirect_uri,
+        access_type="offline",
+        prompt="consent"
+    )
 
 
-@app.route("/calender-info-store", methods = ['GET', 'POST'])
+@app.route("/calender-info-store", methods=['GET', 'POST'])
 def calenderstore():
-  db = SessionLocal()
-  token= oAuth.Fittergem.authorize_access_token()
-  creds_info = {
-    "token": token["access_token"],
-    "refresh_token": token.get("refresh_token"),
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "client_id": app.config["OAUTH2_CLIENT_ID"],
-    "client_secret": app.config["OAUTH2_CLIENT_SECRET"],
-    "scopes": SCOPES
-}
+    db = SessionLocal()
+    token = oAuth.Fittergem.authorize_access_token()
+    
+    creds_info = {
+        "token": token["access_token"],
+        "refresh_token": token.get("refresh_token"),
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": app.config["OAUTH2_CLIENT_ID"],
+        "client_secret": app.config["OAUTH2_CLIENT_SECRET"],
+        "scopes": SCOPES
+    }
 
- 
-  new_user = Calender(
-    client_id_google=session["user_id"],
-    token_google=json.dumps(creds_info),
-    scope_google=token.get("scope"),
-    client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
-)
+    new_user = Calender(
+        client_id_google=session["user_id"],
+        token_google=json.dumps(creds_info),
+        scope_google=token.get("scope"),
+        client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
+    )
 
-  db.merge(new_user)
-  db.commit()
-  pending = session.pop("pending_message", None)
-  if pending:
-        return redirect(url_for("google_calender", msg=pending))
+    db.merge(new_user)
+    db.commit()
 
-  return redirect("/google-calender")
+    # ✅ Check if we had intent to fetch calendar immediately
+    pending = session.pop("pending_message", None)
+    if pending == "fetch_schedule":
+        # ✅ Call GPT integration now
+        try:
+            with httpx.Client() as client:
+                response = client.get(
+                    "https://web-production-f7f35.up.railway.app/google-calender",
+                    cookies=request.cookies  # ✅ Preserve session
+                )
+                print("✅ GPT calendar response:", response.text)
+        except Exception as e:
+            print("❌ Error sending calendar to GPT:", e)
+
+    return """
+    <html>
+      <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+        <h2>Calendar Connected!</h2>
+        <p>Your schedule has been processed. You may now return to the Fittergem app.</p>
+        <script>
+          setTimeout(function() {
+            window.close();
+          }, 1000);
+        </script>
+      </body>
+    </html>
+    """
+
 
 @app.route("/calender-update" , methods=['POST'])
 def calender_update():
