@@ -222,7 +222,7 @@ def Calender_Integration():
         "user_id": session.get("user_id"),
         "message": msg
     }
-    response = httpx.post(f"https://{url}/chat", json=user_input)
+    response = httpx.post(f"https://{url}/chat", json=user_input, timeout=40.0)
     # You can now apply the returned GPT plan (if JSON) automatically
 
  user_id = session["user_id"]
@@ -251,7 +251,7 @@ def Calender_Integration():
        }
 
     with httpx.Client() as client:
-        response =   client.post(f"https://{url_timezone}/chat", json=coordinates)
+        response =   client.post(f"https://{url_timezone}/chat", json=coordinates, timeout=40.0)
         timezone_data = response.json()
         if  not timezone_data:
            timezone_data = "America/Toronto"
@@ -339,7 +339,7 @@ def Calender_Integration():
   }
      
  with httpx.Client() as client:
-        response =   client.post(f"https://{url}/chat", json=user_input)
+        response =   client.post(f"https://{url}/chat", json=user_input, timeout=40.0)
         return jsonify(status="user calender accessed!")
  
 @app.route("/calendar-access")
@@ -355,27 +355,30 @@ def calenderaccess():
 
 @app.route("/calender-info-store", methods=['GET', 'POST'])
 def calenderstore():
-    db = SessionLocal()
-    token = oAuth.Fittergem.authorize_access_token()
+    try:
+     db = SessionLocal()
+     token = oAuth.Fittergem.authorize_access_token()
     
-    creds_info = {
+     creds_info = {
         "token": token["access_token"],
         "refresh_token": token.get("refresh_token"),
         "token_uri": "https://oauth2.googleapis.com/token",
         "client_id": app.config["OAUTH2_CLIENT_ID"],
         "client_secret": app.config["OAUTH2_CLIENT_SECRET"],
         "scopes": SCOPES
-    }
+     }
 
-    new_user = Calender(
+     new_user = Calender(
         client_id_google=session["user_id"],
         token_google=json.dumps(creds_info),
         scope_google=token.get("scope"),
         client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
-    )
+     )
 
-    db.merge(new_user)
-    db.commit()
+     db.merge(new_user)
+     db.commit()
+    finally:
+     db.close()
 
     # ✅ Check if we had intent to fetch calendar immediately
     pending = session.pop("pending_message", None)
@@ -385,7 +388,8 @@ def calenderstore():
             with httpx.Client() as client:
                 response = client.get(
                     "https://web-production-f7f35.up.railway.app/google-calender",
-                    cookies=request.cookies  # ✅ Preserve session
+                    cookies=request.cookies
+                      , timeout=40.0  # ✅ Preserve session
                 )
                 print("✅ GPT calendar response:", response.text)
         except Exception as e:
@@ -513,7 +517,7 @@ def calender_event_delete():
    except Exception as e:
        return jsonify({"status": "Delete failed", "error": str(e)}), 500
 
-
+# starts flask
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
