@@ -414,12 +414,8 @@ def calenderstore():
     if pending == "fetch_schedule":
         # ✅ Call GPT integration now
         try:
-            with httpx.Client() as client:
-                response = client.get(
-                    "https://web-production-f7f35.up.railway.app/google-calender",
-                    cookies=request.cookies
-                      , timeout=40.0  # ✅ Preserve session
-                )
+           
+                response = Calender_Integration()
                 print("✅ GPT calendar response:", response.text)
         except Exception as e:
             print("❌ Error sending calendar to GPT:", e)

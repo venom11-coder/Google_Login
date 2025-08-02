@@ -1,1 +1,1 @@
-web: gunicorn --workers 2 --threads 2 --timeout 60 google_auth:app
+web: gunicorn --workers 2 --threads 2 --timeout 90 google_auth:app
