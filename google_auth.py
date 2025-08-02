@@ -23,13 +23,16 @@ api_key = os.getenv("api_key")
 
 app = Flask(__name__)
 
+
+# ⚠️ Only for localhost testing — REMOVE THIS in production!
+
 CORS(app, supports_credentials=True)
 
 MAP_API_KEY = os.getenv("MAP_API_KEY")
 
 url= "aiintegrationdb-production.up.railway.app"
 
-url_timezone = "web-production-2504b.up.railway.app/timezone"
+#url_timezone = "web-production-2504b.up.railway.app/timezone"
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -212,7 +215,7 @@ def check_login():
         return jsonify({"status": "not_logged_in"})
 
 
-
+ # used to get all user events and send it to chatgpt along with the prompt to store it
 @app.route("/google-calender")
 def Calender_Integration():
  msg = request.args.get("msg")
@@ -245,18 +248,10 @@ def Calender_Integration():
     user_exist.token_google = creds.to_json()
     db.commit()
 
-    coordinates = {
-       "lat" : data.get("latitude") ,
-       "lon" : data.get("longitude")
-       }
+   
 
-    with httpx.Client() as client:
-        response =   client.post(f"https://{url_timezone}/chat", json=coordinates, timeout=40.0)
-        timezone_data = response.json()
-        if  not timezone_data:
-           timezone_data = "America/Toronto"
-        timezone_id = timezone_data.get("timeZoneId", "America/Toronto")   
-
+    data = json.loads(user_exist.token_google)
+    timezone_id = data.get("timezone", "America/Toronto")
 
 
      # detects time in EST but needs to be changed as per the user
@@ -352,12 +347,43 @@ def calenderaccess():
         prompt="consent"
     )
 
+@app.route("/calendar-token-store", methods=["POST"])
+def store_token_with_timezone():
+    db = SessionLocal()
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "User not logged in"}), 403
+
+    data = request.get_json()
+    timezone = data.get("timezone")
+
+    if not timezone:
+        return jsonify({"error": "Timezone missing"}), 400
+
+    user_token = db.query(Calender).filter(Calender.client_id_google == user_id).first()
+    if not user_token:
+        return jsonify({"error": "No token found for user"}), 404
+
+    token_data = json.loads(user_token.token_google)
+    token_data["timezone"] = timezone
+    user_token.token_google = json.dumps(token_data)
+
+    db.commit()
+    return jsonify({"status": "Timezone saved ✅"})
+
+
 
 @app.route("/calender-info-store", methods=['GET', 'POST'])
 def calenderstore():
+    print("calender-info-store endpoint called!")
     try:
      db = SessionLocal()
      token = oAuth.Fittergem.authorize_access_token()
+
+     print("calender-info-store authorization completed!")
+
+   
     
      creds_info = {
         "token": token["access_token"],
@@ -365,7 +391,9 @@ def calenderstore():
         "token_uri": "https://oauth2.googleapis.com/token",
         "client_id": app.config["OAUTH2_CLIENT_ID"],
         "client_secret": app.config["OAUTH2_CLIENT_SECRET"],
-        "scopes": SCOPES
+        "scopes": SCOPES,
+        
+        
      }
 
      new_user = Calender(
@@ -374,6 +402,7 @@ def calenderstore():
         scope_google=token.get("scope"),
         client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
      )
+     print("user info stored in db!")
 
      db.merge(new_user)
      db.commit()
