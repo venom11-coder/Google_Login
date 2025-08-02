@@ -322,11 +322,8 @@ def Calender_Integration():
             lines.append(formatted)
 
  schedule_string = "\n\n".join(lines)
- messages = [
-    {"role": "system", "content": prompt},
-    
-    {"role": "system", "content": schedule_string} # changes to system here!!!! NEEDS TO BE DEPLOYED AGAIN IF CHANGE ACCEPTED!!!!!
-]
+ messages = f"{prompt}\n\n{schedule_string}"
+ 
  user_input = {
          
  "user_id": session.get("user_id") ,
@@ -478,10 +475,12 @@ def calenderstore():
                 # ⬆️ Keep your original prompt
             )
 
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "system", "content": schedule_string}
-        ]
+        messages = f"{prompt}\n\n{schedule_string}"
+
+
+
+
+
 
         # ✅ Send to GPT
         user_input = {
