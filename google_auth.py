@@ -412,13 +412,90 @@ def calenderstore():
     # ✅ Check if we had intent to fetch calendar immediately
     pending = session.pop("pending_message", None)
     if pending == "fetch_schedule":
-        # ✅ Call GPT integration now
-        try:
-           
-                response = Calender_Integration()
-                print("✅ GPT calendar response:", response.text)
-        except Exception as e:
-            print("❌ Error sending calendar to GPT:", e)
+      try:
+        user_id = session["user_id"]
+        db = SessionLocal()
+        user_exist = db.query(Calender).filter(Calender.client_id_google == user_id).first()
+
+        if not user_exist:
+            raise Exception("No calendar token found")
+
+        data = json.loads(user_exist.token_google)
+        creds = Credentials.from_authorized_user_info(data, SCOPES)
+        service = build("calendar", "v3", credentials=creds)
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            user_exist.token_google = creds.to_json()
+            db.commit()
+
+        timezone_id = data.get("timezone", "America/Toronto")
+
+        # Get events
+        time = datetime.now(ZoneInfo(timezone_id)).replace(hour=0, minute=0, second=0, microsecond=0)
+        all_events = []
+
+        for i in range(7):
+            est_start = time + timedelta(days=i)
+            est_end = time + timedelta(days=i + 1)
+            time_min = est_start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            time_max = est_end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+            events_result = service.events().list(
+                calendarId="primary",
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy="startTime"
+            ).execute()
+
+            events = events_result.get("items", [])
+            for event in events:
+                event_detail = {
+                    "start": event["start"].get("dateTime", event["start"].get("date")),
+                    "end": event["end"].get("dateTime"),
+                    "summary": event.get("summary")
+                }
+                all_events.append(event_detail)
+
+        lines = []
+        for event in all_events:
+            formatted = f"Event: {event['summary']}\nStart: {event['start']}\nEnd: {event['end']}"
+            lines.append(formatted)
+
+        schedule_string = "\n\n".join(lines)
+
+        if not lines:
+            prompt = (
+                "if no events found. Do not assume the user is free. "
+                "When recommending workouts, diet changes, or other plans, do not assume full availability. "
+                "Instead, ask the user about their preferred or available time slots before making detailed suggestions. "
+                "Just reply with 'noted'."
+            )
+        else:
+            prompt = (
+                "The following is a 7-day Google Calendar schedule. Summarize when the user is busy..."
+                # ⬆️ Keep your original prompt
+            )
+
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "system", "content": schedule_string}
+        ]
+
+        # ✅ Send to GPT
+        user_input = {
+            "user_id": user_id,  # very important
+            "message": messages
+        }
+
+        response = httpx.post(f"https://{url}/chat", json=user_input, timeout=40.0)
+
+        print("✅ GPT calendar response:", response.text)
+
+      except Exception as e:
+        print("❌ Error sending calendar to GPT:", e)
+
 
     return """
     <html>
