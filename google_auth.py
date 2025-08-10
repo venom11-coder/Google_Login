@@ -60,10 +60,11 @@ DATABASE_URL= os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 
-class Calender(base):
-    __tablename__ = 'Calender'
+class Calendar(base):
+    __tablename__ = 'Calendar'
     client_id_google = Column(Text, primary_key=True)
     token_google = Column(Text)
+    app_user_id = Column(Text)
     client_secret_google = Column(Text)
     scope_google = Column(Text)
     Time = Column(DateTime, default=datetime.utcnow)
@@ -216,8 +217,8 @@ def check_login():
 
 
  # used to get all user events and send it to chatgpt along with the prompt to store it
-@app.route("/google-calender")
-def Calender_Integration():
+@app.route("/google-Calendar")
+def Calendar_Integration():
  msg = request.args.get("msg")
  if msg:
     # Rebuild GPT prompt with that message instead of just the event list
@@ -231,14 +232,17 @@ def Calender_Integration():
  user_id = session["user_id"]
  
  db=SessionLocal()
- user_exist = db.query(Calender).filter(Calender.client_id_google==user_id).first()
+ user_exist = db.query(Calendar).filter(Calendar.client_id_google==user_id).first()
  
  if user_exist is None:
     session["pending_message"] = "fetch_schedule"
     return redirect("/calendar-access")
  
+ 
  data=json.loads(user_exist.token_google)
+ 
  if user_exist is not None:
+  fe_id = user_exist.app_user_id
   creds=  Credentials.from_authorized_user_info(data, SCOPES)
  service = build("calendar", "v3", credentials=creds)
 
@@ -263,7 +267,7 @@ def Calender_Integration():
        est_start = time + timedelta(days=i)
        est_end = time + timedelta(days=i + 1)
       
-       # sends the query to calender in UTC
+       # sends the query to Calendar in UTC
        time_min = est_start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
        time_max = est_end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -326,23 +330,25 @@ def Calender_Integration():
  
  user_input = {
          
- "user_id": session.get("user_id") ,
+ "user_id": fe_id ,
  "message": messages
   }
      
  with httpx.Client() as client:
         response =   client.post(f"https://{url}/chat", json=user_input, timeout=40.0)
-        return jsonify(status="user calender accessed!")
+        return jsonify(status="user Calendar accessed!")
  
 @app.route("/calendar-access")
-def calenderaccess():
+def Calendaraccess():
+    frontend_user_id = request.args.get("user_id")
+   
     session["pending_message"] = "fetch_schedule"  # ✅ Save the intent
-    redirect_uri = url_for("calenderstore", _external=True)
     return oAuth.Fittergem.authorize_redirect(
-        redirect_uri,
-        access_type="offline",
-        prompt="consent"
-    )
+    redirect_uri=url_for("Calendarstore", _external=True),
+    state=frontend_user_id,  # ✅ store user id here
+    access_type="offline",
+    prompt="consent"
+)
 
 @app.route("/calendar-token-store", methods=["POST"])
 def store_token_with_timezone():
@@ -358,7 +364,7 @@ def store_token_with_timezone():
     if not timezone:
         return jsonify({"error": "Timezone missing"}), 400
 
-    user_token = db.query(Calender).filter(Calender.client_id_google == user_id).first()
+    user_token = db.query(Calendar).filter(Calendar.client_id_google == user_id).first()
     if not user_token:
         return jsonify({"error": "No token found for user"}), 404
 
@@ -371,14 +377,16 @@ def store_token_with_timezone():
 
 
 
-@app.route("/calender-info-store", methods=['GET', 'POST'])
-def calenderstore():
-    print("calender-info-store endpoint called!")
+@app.route("/Calendar-info-store", methods=['GET', 'POST'])
+def Calendarstore():
+    frontend_user_id = request.args.get("state")
+
+    print("Calendar-info-store endpoint called!")
     try:
      db = SessionLocal()
      token = oAuth.Fittergem.authorize_access_token()
 
-     print("calender-info-store authorization completed!")
+     print("Calendar-info-store authorization completed!")
 
    
     
@@ -393,9 +401,16 @@ def calenderstore():
         
      }
 
-     new_user = Calender(
-        client_id_google=session["user_id"],
+     access_token = token["access_token"]
+     uinfo = requests.get(
+     "https://www.googleapis.com/oauth2/v1/userinfo",
+     headers={"Authorization": f"Bearer {access_token}"}
+     ).json()
+     google_id = uinfo["id"]  
+     new_user = Calendar(
+        client_id_google=google_id,
         token_google=json.dumps(creds_info),
+        app_user_id=frontend_user_id,   
         scope_google=token.get("scope"),
         client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
      )
@@ -410,9 +425,9 @@ def calenderstore():
     pending = session.pop("pending_message", None)
     if pending == "fetch_schedule":
       try:
-        user_id = session["user_id"]
+        user_id = google_id
         db = SessionLocal()
-        user_exist = db.query(Calender).filter(Calender.client_id_google == user_id).first()
+        user_exist = db.query(Calendar).filter(Calendar.client_id_google == user_id).first()
 
         if not user_exist:
             raise Exception("No calendar token found")
@@ -484,7 +499,7 @@ def calenderstore():
 
         # ✅ Send to GPT
         user_input = {
-            "user_id": user_id,  # very important
+            "user_id": frontend_user_id,  # very important
             "message": messages
         }
 
@@ -511,8 +526,8 @@ def calenderstore():
     """
 
 
-@app.route("/calender-update" , methods=['POST'])
-def calender_update():
+@app.route("/Calendar-update" , methods=['POST'])
+def Calendar_update():
    
    
    db = SessionLocal()
@@ -521,7 +536,7 @@ def calender_update():
    data_event= request.get_json()
   
 
-   user= db.query(Calender).filter(Calender.client_id_google==session["user_id"]).first()
+   user= db.query(Calendar).filter(Calendar.client_id_google==session["user_id"]).first()
    if not user:
      return redirect("/calendar-access")
    
@@ -541,7 +556,7 @@ def calender_update():
       return jsonify({"error": "Invalid format: 'events' should be a list"}), 400
 
    for each_event in data_event["events"]:
-     calender_event = {
+     Calendar_event = {
         
         "summary" :  each_event["summary"] ,
         "description": each_event["event"] ,
@@ -558,22 +573,22 @@ def calender_update():
 
         
      }
-     new_schedule = service.events().insert(calendarId="primary", body=calender_event).execute()
+     new_schedule = service.events().insert(calendarId="primary", body=Calendar_event).execute()
      event_ids.append(new_schedule["id"])
 
 
 
    return jsonify({"status": "Events created", "event_ids": event_ids})
 
-@app.route("/calender-delete", methods=['POST'])
-def calender_event_delete():
+@app.route("/Calendar-delete", methods=['POST'])
+def Calendar_event_delete():
    db = SessionLocal()
    
    
    data_event= request.get_json()
   
 
-   user= db.query(Calender).filter(Calender.client_id_google==session["user_id"]).first()
+   user= db.query(Calendar).filter(Calendar.client_id_google==session["user_id"]).first()
    if not user:
      return redirect("/calendar-access")
    
