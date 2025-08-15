@@ -11,4 +11,5 @@ google-auth-oauthlib
 starlette
 python-multipart
 tzdata
+gunicorn
 psycopg2-binary
