@@ -318,7 +318,7 @@ async def Calendar_Integration(request: Request):
         return JSONResponse(status="user Calendar accessed!")
 
 # calendar access endpoint 
-@app.get("/calendar-access")
+@app.api_route("/calendar-access", methods=["GET", "POST"])
 async def Calendaraccess(request: Request):
     frontend_user_id = request.args.get("user_id")
     if not frontend_user_id:
