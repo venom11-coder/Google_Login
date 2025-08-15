@@ -13,3 +13,4 @@ python-multipart
 tzdata
 gunicorn
 psycopg2-binary
+itsdangerous
