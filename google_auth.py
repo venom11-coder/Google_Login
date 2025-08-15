@@ -320,7 +320,7 @@ async def Calendar_Integration(request: Request):
 # calendar access endpoint 
 @app.api_route("/calendar-access", methods=["GET", "POST"])
 async def Calendaraccess(request: Request):
-    frontend_user_id = request.args.get("user_id")
+    frontend_user_id = request.query_params.get("user_id")
     if not frontend_user_id:
         return JSONResponse({"error": "User ID is required"}), 400
    
@@ -362,8 +362,8 @@ async def store_token_with_timezone(request: Request):
 
 
 @app.api_route("/Calendar-info-store",methods=["GET", "POST"], name="Calendarstore")
-async def Calendarstore(request: Request):
-    frontend_user_id = request.args.get("state")
+async def Calendarstore(request: Request, state: str):
+    frontend_user_id = state
 
     print("Calendar-info-store endpoint called!")
     try:
