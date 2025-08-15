@@ -320,8 +320,10 @@ async def Calendar_Integration(request: Request):
 # calendar access endpoint 
 @app.api_route("/calendar-access", methods=["GET", "POST"])
 async def Calendaraccess(request: Request):
+ try: 
     data = await request.json()
-    frontend_user_id = data.get("user_id")
+    #frontend_user_id = data.get("user_id")
+    frontend_user_id = "1234"
     print("Calendar access endpoint called with user_id:", frontend_user_id)
     if not frontend_user_id:
         return JSONResponse({"error": "User ID is required"}), 400
@@ -335,6 +337,9 @@ async def Calendaraccess(request: Request):
         access_type="offline",
         prompt="consent"
     )
+ except Exception as e:
+    print("Error in Calendar access endpoint:", e)
+    return JSONResponse({"error": str(e)}), 500
 
 
 @app.post("/calendar-token-store")
@@ -366,6 +371,7 @@ async def store_token_with_timezone(request: Request):
 
 @app.api_route("/Calendar-info-store",methods=["GET", "POST"], name="Calendarstore")
 async def Calendarstore(request: Request, state: str):
+ try:
     frontend_user_id = state
 
     print("Calendar-info-store endpoint called!")
@@ -509,6 +515,9 @@ async def Calendarstore(request: Request, state: str):
       </body>
     </html>
     """
+ except Exception as e:
+    print("Error in Calendarstore:", e)
+    return JSONResponse({"error": str(e)}), 500
 
 
 @app.post("/Calendar-update")
