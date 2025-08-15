@@ -320,11 +320,14 @@ async def Calendar_Integration(request: Request):
 # calendar access endpoint 
 @app.api_route("/calendar-access", methods=["GET", "POST"])
 async def Calendaraccess(request: Request):
-    frontend_user_id = request.query_params.get("user_id")
+    data = await request.json()
+    frontend_user_id = data.get("user_id")
+    print("Calendar access endpoint called with user_id:", frontend_user_id)
     if not frontend_user_id:
         return JSONResponse({"error": "User ID is required"}), 400
    
     redirect_uri = request.url_for("Calendarstore")  # callback route name
+    print("Redirect URI for OAuth:", redirect_uri)
     return await oAuth.Fittergem.authorize_redirect(
         request,                      # Pass request first
         redirect_uri=redirect_uri,
