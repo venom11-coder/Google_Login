@@ -21,5 +21,7 @@ COPY . .
 
 EXPOSE 8080
 
-# Start Gunicorn with Uvicorn worker
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "google_auth:app", "--bind", "0.0.0.0:8080"]
+# Replace the last line in Dockerfile
+CMD gunicorn -w 4 -k uvicorn.workers.UvicornWorker google_auth:app --bind 0.0.0.0:$PORT
+
+
