@@ -361,7 +361,7 @@ async def store_token_with_timezone(request: Request):
 
 
 
-@app.post("/Calendar-info-store", name="Calendarstore")
+@app.api_route("/Calendar-info-store",methods=["GET", "POST"], name="Calendarstore")
 async def Calendarstore(request: Request):
     frontend_user_id = request.args.get("state")
 
