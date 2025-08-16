@@ -2,6 +2,7 @@ Flask
 gunicorn
 python-dotenv
 httpx
+uvicorn
 requests
 SQLAlchemy
 Flask-Cors
