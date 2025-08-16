@@ -32,7 +32,7 @@ MAP_API_KEY = os.getenv("MAP_API_KEY")
 
 url= "aiintegrationdb-production.up.railway.app"
 
-#url_timezone = "web-production-2504b.up.railway.app/timezone"
+#url_timezone = "<YOUR-GOOGLE-MAPS-BACKEND-URL>/timezone"
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -284,11 +284,9 @@ def Calendar_Integration():
        events = events_result.get("items", [])
        lines = []
 
-       data =  request.json if request.is_json else {}
+       data = request.json if request.is_json else {}
 
     
-
-      
 
        if not events:
         print("No upcoming events found in google calendar in the next 7 days.")
@@ -363,7 +361,7 @@ def store_token_with_timezone():
 
 
 
-@app.route("/Calendar-info-store", methods=['GET', 'POST'])
+@app.route("/Calender-info-store", methods=['GET', 'POST'])
 def Calendarstore():
     frontend_user_id = request.args.get("state")
 
@@ -468,6 +466,7 @@ def Calendarstore():
                 "if no events found. Do not assume the user is free. "
                 "When recommending workouts, diet changes, or other plans, do not assume full availability. "
                 "Instead, ask the user about their preferred or available time slots before making detailed suggestions. "
+                "Just reply with 'noted'."
             )
         else:
             prompt = (
@@ -485,7 +484,7 @@ def Calendarstore():
         # ✅ Send to GPT
         user_input = {
             "user_id": frontend_user_id,  # very important
-            "events": messages
+            "message": messages
         }
 
         response = httpx.post(f"https://{url}/user-calendar-data-store", json=user_input, timeout=40.0)
