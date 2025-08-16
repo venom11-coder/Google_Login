@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI
+from fastapi_proxiedheadersmiddleware import ProxiedHeadersMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
@@ -23,6 +25,17 @@ load_dotenv()
 api_key = os.getenv("api_key")
 
 app = FastAPI()
+
+
+app.add_middleware(ProxiedHeadersMiddleware, trusted_hosts=['*'])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ⚠️ Only for localhost testing — REMOVE THIS in production!
