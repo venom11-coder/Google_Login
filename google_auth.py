@@ -318,7 +318,7 @@ async def Calendar_Integration(request: Request):
         return JSONResponse(status="user Calendar accessed!")
 
 # calendar access endpoint 
-@app.api_route("/calendar-access", methods=["GET", "POST"])
+@app.post("/calendar-access")
 async def Calendaraccess(request: Request):
  try: 
     data = await request.json()
@@ -335,7 +335,7 @@ async def Calendaraccess(request: Request):
         redirect_uri=redirect_uri,
         state=frontend_user_id,
         access_type="offline",
-        prompt="consent"
+        prompt="consent",
     )
  except Exception as e:
     print("Error in Calendar access endpoint:", e)
