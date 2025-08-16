@@ -1,45 +1,32 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
-from fastapi import FastAPI
-from fastapi_proxiedheadersmiddleware import ProxiedHeadersMiddleware
-from starlette.middleware.sessions import SessionMiddleware
-from google.auth.transport.requests import Request as GoogleRequest
+from flask import Flask, url_for, session, redirect, jsonify, request
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from fastapi.middleware.cors import CORSMiddleware
 import requests
 from zoneinfo import ZoneInfo
 import httpx
 import json
-from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.flask_client import OAuth
 import os
 from dotenv import load_dotenv
 from sqlalchemy import Text, Column, Integer,DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-
+from flask_cors import CORS
 from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
 api_key = os.getenv("api_key")
+# uses flask to communicate
+# creates a flask object
 
-app = FastAPI()
-
-
-app.add_middleware(ProxiedHeadersMiddleware, trusted_hosts=['*'])
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = Flask(__name__)
 
 
 # ⚠️ Only for localhost testing — REMOVE THIS in production!
 
+CORS(app, supports_credentials=True)
 
 MAP_API_KEY = os.getenv("MAP_API_KEY")
 
@@ -52,13 +39,18 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
 #VERY IMPORTANT LINE TO FORCE GOOGLE TO GENERATE HTTPS REQUEST!!!!!
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Use specific domain in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+
+
+# Use Flask's default secure cookie-based session
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_USE_SIGNER"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True  # Because Railway uses HTTPS
+
+
 
 
 base= declarative_base()
@@ -88,26 +80,29 @@ class User(base):
    
 base.metadata.create_all(engine)
 
+# create the client id, secret and url and also flask secret pwd
 # used port 5000 for local testing
+appconf= {
+    "OAUTH2_CLIENT_ID": os.getenv("OAUTH2_CLIENT_ID") ,
+    "OAUTH2_CLIENT_SECRET":os.getenv("OAUTH2_CLIENT_SECRET"),
+    "OAUTH2_META_URL": os.getenv("OAUTH2_META_URL"),
+    "FLASK_SECRET": os.getenv("FLASK_SECRET"),
+    
 
-OAUTH2_CLIENT_ID= os.getenv("OAUTH2_CLIENT_ID") 
-OAUTH2_CLIENT_SECRET=os.getenv("OAUTH2_CLIENT_SECRET")
-OAUTH2_META_URL= os.getenv("OAUTH2_META_URL")
-FASTAPI_SECRET= os.getenv("FASTAPI_SECRET") # for fastAPI session management!!!!
-
+}
 
 # configures the app with the credentials
 
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("FASTAPI_SECRET"))
-# creates an OAuth object
-oAuth = OAuth()
+app.config.update(appconf)
+app.secret_key = app.config["FLASK_SECRET"]
+oAuth = OAuth(app)
 
 
 # registers with all the credentaisl
 oAuth.register("Fittergem",
-               client_id= os.getenv("OAUTH2_CLIENT_ID"),
-               client_secret= os.getenv("OAUTH2_CLIENT_SECRET"),
-               server_metadata_url = os.getenv("OAUTH2_META_URL"),
+               client_id= app.config.get("OAUTH2_CLIENT_ID"),
+               client_secret= app.config.get("OAUTH2_CLIENT_SECRET"),
+               server_metadata_url = app.config.get("OAUTH2_META_URL"),
                client_kwargs= {"scope": "openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar" ,
                
                }
@@ -115,13 +110,13 @@ oAuth.register("Fittergem",
 
 
 
-@app.get("/")
-def home(request: Request):
+@app.route("/")
+def home():
     db = SessionLocal()
-    user_id= request.session.get("user_id")
+    user_id= session.get("user_id")
     
     if not user_id:
-       return RedirectResponse(request.url_for("googleLogin"))
+       return redirect(url_for("googleLogin"))
     user_exist = db.query(User).filter(User.user_id==user_id).first()
     if user_exist is not None:
           return """
@@ -139,24 +134,24 @@ def home(request: Request):
 """
 
     else:
-        return RedirectResponse(request.url_for("googleLogin", external=True))
+        return redirect(url_for("googleLogin", external=True))
 
-@app.get("/google-login")
-def googleLogin(request: Request):
-    redirect_uri = request.url_for("googleCallback", _external=True, _scheme="https")
+@app.route("/google-login")
+def googleLogin():
+    redirect_uri = url_for("googleCallback", _external=True, _scheme="https")
     return oAuth.Fittergem.authorize_redirect(redirect_uri)
 
-@app.get("/check-login-session")
-def check_login_session(request: Request):
-    user_id = request.session.get("user_id")
+@app.route("/check-login-session")
+def check_login_session():
+    user_id = session.get("user_id")
     if user_id:
-        return JSONResponse({"status": "logged_in", "user_id": user_id})
-    return JSONResponse({"status": "not_logged_in"})
+        return jsonify({"status": "logged_in", "user_id": user_id})
+    return jsonify({"status": "not_logged_in"})
 
 
 
-@app.get("/signin-google")
-def googleCallback(request: Request):
+@app.route("/signin-google")
+def googleCallback():
     try:
         token = oAuth.Fittergem.authorize_access_token()
         access_token = token["access_token"]
@@ -169,7 +164,7 @@ def googleCallback(request: Request):
         user_info = response.json()
 
         google_id = user_info["id"]
-        request.session["user_id"] = google_id
+        session["user_id"] = google_id
         email_id = user_info["email"]
         full_name = user_info["name"]
         first_name = user_info["given_name"]
@@ -188,9 +183,8 @@ def googleCallback(request: Request):
             )
             db.add(new_user)
             db.commit()
-            db.close()
 
-        return RedirectResponse("/calendar-access")
+        return redirect("/calendar-access")
 
 
 
@@ -200,49 +194,49 @@ def googleCallback(request: Request):
 
     except Exception as e:
         print("Error during callback:", e)
-        return JSONResponse({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.get("/logout")
-async def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/")
+@app.route("/logout")
+async def logout():
+    session.clear()
+    return redirect("/")
 
-@app.get("/check-login")
-def check_login(request: Request):
+@app.route("/check-login")
+def check_login():
     email = request.args.get("email")
     if not email:
-        return JSONResponse({"error": "Missing email"}), 400
+        return jsonify({"error": "Missing email"}), 400
 
     db = SessionLocal()
     user = db.query(User).filter(User.email_id == email).first()
 
     if user:
-        return JSONResponse({"status": "logged_in", "user_id": user.user_id})
+        return jsonify({"status": "logged_in", "user_id": user.user_id})
     else:
-        return JSONResponse({"status": "not_logged_in"})
+        return jsonify({"status": "not_logged_in"})
 
 
  # used to get all user events and send it to chatgpt along with the prompt to store it
-@app.get("/google-Calendar")
-async def Calendar_Integration(request: Request):
+@app.route("/google-Calendar")
+def Calendar_Integration():
  msg = request.args.get("msg")
  if msg:
     # Rebuild GPT prompt with that message instead of just the event list
     user_input = {
-        "user_id": request.session.get("user_id"),
+        "user_id": session.get("user_id"),
         "message": msg
     }
     response = httpx.post(f"https://{url}/chat", json=user_input, timeout=40.0)
     # You can now apply the returned GPT plan (if JSON) automatically
 
- user_id = request.session["user_id"]
+ user_id = session["user_id"]
  
  db=SessionLocal()
  user_exist = db.query(Calendar).filter(Calendar.client_id_google==user_id).first()
  
  if user_exist is None:
-    request.session["pending_message"] = "fetch_schedule"
-    return RedirectResponse("/calendar-access")
+    session["pending_message"] = "fetch_schedule"
+    return redirect("/calendar-access")
  
  
  data=json.loads(user_exist.token_google)
@@ -290,7 +284,7 @@ async def Calendar_Integration(request: Request):
        events = events_result.get("items", [])
        lines = []
 
-       data = await  request.json if request.is_json else {}
+       data =  request.json if request.is_json else {}
 
     
 
@@ -328,64 +322,50 @@ async def Calendar_Integration(request: Request):
      
  with httpx.Client() as client:
         response =   client.post(f"https://{url}/chat", json=user_input, timeout=40.0)
-        return JSONResponse(status="user Calendar accessed!")
-
-# calendar access endpoint 
-@app.post("/calendar-access")
-async def Calendaraccess(request: Request):
- try: 
-    data = await request.json()
-    #frontend_user_id = data.get("user_id")
-    frontend_user_id = "1234"
-    print("Calendar access endpoint called with user_id:", frontend_user_id)
-    if not frontend_user_id:
-        return JSONResponse({"error": "User ID is required"}), 400
+        return jsonify(status="user Calendar accessed!")
+ 
+@app.route("/calendar-access")
+def Calendaraccess():
+    frontend_user_id = request.args.get("user_id")
    
-    redirect_uri = request.url_for("Calendarstore")  # callback route name
-    print("Redirect URI for OAuth:", redirect_uri)
-    return await oAuth.Fittergem.authorize_redirect(
-        request,                      # Pass request first
-        redirect_uri=redirect_uri,
-        state=frontend_user_id,
-        access_type="offline",
-        prompt="consent",
-    )
- except Exception as e:
-    print("Error in Calendar access endpoint:", e)
-    return JSONResponse({"error": str(e)}), 500
+    session["pending_message"] = "fetch_schedule"  # ✅ Save the intent
+    return oAuth.Fittergem.authorize_redirect(
+    redirect_uri=url_for("Calendarstore", _external=True),
+    state=frontend_user_id,  # ✅ store user id here
+    access_type="offline",
+    prompt="consent"
+)
 
-
-@app.post("/calendar-token-store")
-async def store_token_with_timezone(request: Request):
+@app.route("/calendar-token-store", methods=["POST"])
+def store_token_with_timezone():
     db = SessionLocal()
-    user_id = request.session.get("user_id")
+    user_id = session.get("user_id")
 
     if not user_id:
-        return JSONResponse({"error": "User not logged in"}), 403
+        return jsonify({"error": "User not logged in"}), 403
 
-    data = await request.json()
+    data = request.get_json()
     timezone = data.get("timezone")
 
     if not timezone:
-        return JSONResponse({"error": "Timezone missing"}), 400
+        return jsonify({"error": "Timezone missing"}), 400
 
     user_token = db.query(Calendar).filter(Calendar.client_id_google == user_id).first()
     if not user_token:
-        return JSONResponse({"error": "No token found for user"}), 404
+        return jsonify({"error": "No token found for user"}), 404
 
     token_data = json.loads(user_token.token_google)
     token_data["timezone"] = timezone
     user_token.token_google = json.dumps(token_data)
 
     db.commit()
-    return JSONResponse({"status": "Timezone saved ✅"})
+    return jsonify({"status": "Timezone saved ✅"})
 
 
 
-@app.api_route("/Calendar-info-store",methods=["GET", "POST"], name="Calendarstore")
-async def Calendarstore(request: Request, state: str):
- try:
-    frontend_user_id = state
+@app.route("/Calendar-info-store", methods=['GET', 'POST'])
+def Calendarstore():
+    frontend_user_id = request.args.get("state")
 
     print("Calendar-info-store endpoint called!")
     try:
@@ -400,9 +380,10 @@ async def Calendarstore(request: Request, state: str):
         "token": token["access_token"],
         "refresh_token": token.get("refresh_token"),
         "token_uri": "https://oauth2.googleapis.com/token",
-        "client_id": os.getenv("OAUTH2_CLIENT_ID"),
-        "client_secret": os.getenv("OAUTH2_CLIENT_SECRET"),
+        "client_id": app.config["OAUTH2_CLIENT_ID"],
+        "client_secret": app.config["OAUTH2_CLIENT_SECRET"],
         "scopes": SCOPES,
+        
         
      }
 
@@ -417,7 +398,7 @@ async def Calendarstore(request: Request, state: str):
         token_google=json.dumps(creds_info),
         app_user_id=frontend_user_id,   
         scope_google=token.get("scope"),
-        client_secret_google=os.getenv("OAUTH2_CLIENT_SECRET")
+        client_secret_google=app.config["OAUTH2_CLIENT_SECRET"]
      )
      print("user info stored in db!")
 
@@ -427,7 +408,7 @@ async def Calendarstore(request: Request, state: str):
      db.close()
 
     # ✅ Check if we had intent to fetch calendar immediately
-    pending = request.session.pop("pending_message", None)
+    pending = session.pop("pending_message", None)
     if pending == "fetch_schedule":
       try:
         user_id = google_id
@@ -495,7 +476,7 @@ async def Calendarstore(request: Request, state: str):
             )
 
         messages = f"{prompt}\n\n{schedule_string}"
-        
+
 
 
 
@@ -514,7 +495,7 @@ async def Calendarstore(request: Request, state: str):
       except Exception as e:
         print("❌ Error sending calendar to GPT:", e)
 
-    
+
     return """
     <html>
       <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
@@ -528,24 +509,21 @@ async def Calendarstore(request: Request, state: str):
       </body>
     </html>
     """
- except Exception as e:
-    print("Error in Calendarstore:", e)
-    return JSONResponse({"error": str(e)}), 500
 
 
-@app.post("/Calendar-update")
-async def Calendar_update(request: Request):
+@app.route("/Calendar-update" , methods=['POST'])
+def Calendar_update():
    
    
    db = SessionLocal()
    
    
-   data_event= await request.json()
+   data_event= request.get_json()
   
 
-   user= db.query(Calendar).filter(Calendar.client_id_google==request.session["user_id"]).first()
+   user= db.query(Calendar).filter(Calendar.client_id_google==session["user_id"]).first()
    if not user:
-     return RedirectResponse("/calendar-access")
+     return redirect("/calendar-access")
    
    data= json.loads(user.token_google)
 
@@ -560,7 +538,7 @@ async def Calendar_update(request: Request):
    event_ids =[]
 
    if "events" not in data_event or not isinstance(data_event["events"], list):
-      return JSONResponse({"error": "Invalid format: 'events' should be a list"}), 400
+      return jsonify({"error": "Invalid format: 'events' should be a list"}), 400
 
    for each_event in data_event["events"]:
      Calendar_event = {
@@ -585,19 +563,19 @@ async def Calendar_update(request: Request):
 
 
 
-   return JSONResponse({"status": "Events created", "event_ids": event_ids})
+   return jsonify({"status": "Events created", "event_ids": event_ids})
 
-@app.post("/Calendar-delete")
-async def Calendar_event_delete(request: Request):
+@app.route("/Calendar-delete", methods=['POST'])
+def Calendar_event_delete():
    db = SessionLocal()
    
    
-   data_event= await request.json()
+   data_event= request.get_json()
   
 
-   user= db.query(Calendar).filter(Calendar.client_id_google==request.session["user_id"]).first()
+   user= db.query(Calendar).filter(Calendar.client_id_google==session["user_id"]).first()
    if not user:
-     return RedirectResponse("/calendar-access")
+     return redirect("/calendar-access")
    
    data= json.loads(user.token_google)
 
@@ -609,6 +587,7 @@ async def Calendar_event_delete(request: Request):
          creds.refresh(Request())
     
    
+   # Add this after data_event = request.get_json()
    user_summary = data_event.get("summary")
    date = data_event.get("date")  # 'YYYY-MM-DD'
    timeZone = data_event.get("timeZone", "America/New_York")
@@ -635,6 +614,11 @@ async def Calendar_event_delete(request: Request):
         # Delete event
    
        service.events().delete(calendarId="primary", eventId=event["id"]).execute()
-       return JSONResponse({"status": "Event deleted", "event_id": event["id"]})
+       return jsonify({"status": "Event deleted", "event_id": event["id"]})
    except Exception as e:
-       return JSONResponse({"status": "Delete failed", "error": str(e)}), 500
+       return jsonify({"status": "Delete failed", "error": str(e)}), 500
+
+# starts flask
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
